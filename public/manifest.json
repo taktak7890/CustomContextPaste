@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Google Chat テンプレート",
+  "version": "2.0.0",
+  "description": "Google Chat のコンテキストメニューからテンプレートを挿入する拡張機能",
+  "permissions": [
+    "contextMenus",
+    "scripting",
+    "storage",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "host_permissions": [
+    "https://chat.google.com/*"
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "テンプレート設定を開く",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
