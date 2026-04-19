@@ -1,9 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react'
+import type { Site } from '../../types'
 
 interface Props {
   initialTitle: string
   initialFormat: string
-  onSave: (title: string, format: string) => void
+  initialTargetSiteIds?: string[]
+  sites: Site[]
+  onSave: (title: string, format: string, targetSiteIds?: string[]) => void
   onCancel: () => void
   insertTrigger?: { ph: string; ts: number } | null
 }
@@ -11,20 +14,29 @@ interface Props {
 export default function TemplateForm({
   initialTitle,
   initialFormat,
+  initialTargetSiteIds,
+  sites,
   onSave,
   onCancel,
   insertTrigger,
 }: Props) {
   const [title, setTitle] = useState(initialTitle)
   const [format, setFormat] = useState(initialFormat)
+  const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(initialTargetSiteIds || [])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const canSave = title.trim().length > 0
+  const canSave = title.trim().length > 0 && selectedSiteIds.length > 0
+
+  const toggleSite = (id: string) => {
+    setSelectedSiteIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    )
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSave) return
-    onSave(title, format)
+    onSave(title, format, selectedSiteIds.length > 0 ? selectedSiteIds : undefined)
   }
 
   /** カーソル位置にプレースホルダーを挿入するヘルパー */
@@ -99,6 +111,32 @@ export default function TemplateForm({
                      placeholder:text-slate-300 placeholder:font-sans focus:outline-none focus:ring-2
                      focus:ring-blue-500 focus:border-transparent transition-all resize-none leading-relaxed"
         />
+      </div>
+
+      {/* 対象サイト */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1.5">
+          対象サイト <span className="text-red-400">*</span> （1つ以上選択）
+        </label>
+        {sites.length === 0 ? (
+          <p className="text-xs text-red-500 mt-2">対象サイトが登録されていません。先にサイト設定から登録してください。</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {sites.map(site => (
+              <label key={site.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 border border-slate-200 rounded-xl hover:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent transition-all overflow-hidden">
+                <input
+                  type="checkbox"
+                  checked={selectedSiteIds.includes(site.id)}
+                  onChange={() => toggleSite(site.id)}
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-slate-700 truncate">{site.name}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ボタン */}

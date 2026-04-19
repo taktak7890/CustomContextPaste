@@ -3,7 +3,7 @@
 import type { StorageData, Template } from './types'
 import { expandPlaceholders } from './utils/placeholder'
 
-const DOCUMENT_URL_PATTERNS = ['https://chat.google.com/*']
+const DEFAULT_URL_PATTERNS = ['https://chat.google.com/*']
 
 // ─────────────────────────────────────────────
 // コンテキストメニューの再構築
@@ -12,26 +12,69 @@ const DOCUMENT_URL_PATTERNS = ['https://chat.google.com/*']
 async function rebuildContextMenus(): Promise<void> {
   await chrome.contextMenus.removeAll()
 
-  const data = (await chrome.storage.local.get(['name', 'templates'])) as Partial<StorageData>
+  const data = (await chrome.storage.local.get(['name', 'templates', 'targetUrls', 'sites'])) as Partial<StorageData>
   const templates: Template[] = data.templates ?? []
+  
+  let sites = data.sites ?? [];
+  if (sites.length === 0 && data.targetUrls && data.targetUrls.length > 0) {
+    sites = data.targetUrls.map(url => ({
+      id: crypto.randomUUID(),
+      name: url.includes('chat.google.com') ? 'Google Chat' : url,
+      urlPattern: url
+    }));
+  }
+  if (sites.length === 0) {
+    sites = [{ id: 'default', name: 'すべてのサイト (デフォルト)', urlPattern: '<all_urls>' }];
+  }
+
+  const siteUrlMap = new Map<string, string>();
+  for (const s of sites) {
+    siteUrlMap.set(s.id, s.urlPattern);
+  }
+  const globalPatterns = sites.map(s => s.urlPattern);
+
+  const globalCreateProps: chrome.contextMenus.CreateProperties = {
+    contexts: ['editable'],
+    documentUrlPatterns: globalPatterns,
+  }
 
   if (templates.length === 0) {
     chrome.contextMenus.create({
+      ...globalCreateProps,
       id: 'no_templates',
       title: 'テンプレートが登録されていません',
-      contexts: ['editable'],
-      documentUrlPatterns: DOCUMENT_URL_PATTERNS,
       enabled: false,
+    }, () => {
+      const err = chrome.runtime.lastError;
+      if (err) console.warn('Context menu creation failed:', err.message);
     })
     return
   }
 
   for (const tmpl of templates) {
+    let tmplPatterns: string[] = [];
+    if (tmpl.targetSiteIds && tmpl.targetSiteIds.length > 0) {
+      tmplPatterns = tmpl.targetSiteIds.map(id => siteUrlMap.get(id)).filter(Boolean) as string[];
+    }
+    
+    // Migration fallback for templates saved briefly with old targetUrls struct
+    const oldTargetUrls = (tmpl as any).targetUrls;
+    if (tmplPatterns.length === 0 && oldTargetUrls && oldTargetUrls.length > 0) {
+      tmplPatterns = oldTargetUrls;
+    }
+
+    if (tmplPatterns.length === 0) {
+      tmplPatterns = globalPatterns;
+    }
+
     chrome.contextMenus.create({
+      contexts: ['editable'],
+      documentUrlPatterns: tmplPatterns,
       id: `template_${tmpl.id}`,
       title: tmpl.title,
-      contexts: ['editable'],
-      documentUrlPatterns: DOCUMENT_URL_PATTERNS,
+    }, () => {
+      const err = chrome.runtime.lastError;
+      if (err) console.warn(`Context menu creation failed for template ${tmpl.title}:`, err.message);
     })
   }
 }
@@ -52,7 +95,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 // ストレージ変更時（オプション画面で保存 → メニュー即時更新）
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && ('templates' in changes || 'name' in changes)) {
+  if (area === 'local' && ('templates' in changes || 'name' in changes || 'targetUrls' in changes || 'sites' in changes)) {
     rebuildContextMenus()
   }
 })
@@ -103,7 +146,7 @@ function insertTextAtCursor(text: string): void {
 
   if (!isContentEditable && !isInputLike) return
 
-  // ① execCommand（deprecated だが現時点で Google Chat に最も確実に効く）
+  // ① execCommand（deprecated だが一部のサイト等のエディタに最も確実に効く）
   if (document.execCommand('insertText', false, text)) return
 
   // ② フォールバック: contenteditable に Selection / Range API で挿入

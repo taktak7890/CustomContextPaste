@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import type { StorageData, Template } from '../types'
+import type { Site, StorageData, Template } from '../types'
 import GlobalSettings from './components/GlobalSettings'
+import SiteManager from './components/SiteManager'
 import TemplateManager from './components/TemplateManager'
 
 type SaveStatus = 'idle' | 'saving' | 'saved'
@@ -8,23 +9,58 @@ type SaveStatus = 'idle' | 'saving' | 'saved'
 export default function App() {
   const [name, setName] = useState('')
   const [templates, setTemplates] = useState<Template[]>([])
+  const [sites, setSites] = useState<Site[]>([])
   const [loading, setLoading] = useState(true)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   // ストレージから初期値を読み込む
   useEffect(() => {
-    chrome.storage.local.get(['name', 'templates'], (data: Partial<StorageData>) => {
+    chrome.storage.local.get(['name', 'templates', 'targetUrls', 'sites'], (data: Partial<StorageData>) => {
       setName(data.name ?? '')
       setTemplates(data.templates ?? [])
+      
+      // 旧バージョン(targetUrls)からの移行処理
+      let loadedSites = data.sites ?? []
+      if (loadedSites.length === 0 && data.targetUrls && data.targetUrls.length > 0) {
+        // targetUrls を sites に変換
+        loadedSites = data.targetUrls.map(url => ({
+          id: crypto.randomUUID(),
+          name: url.includes('chat.google.com') ? 'Google Chat' : url,
+          urlPattern: url
+        }))
+        // 保存は persist によって即時行われる（ユーザーが何か変えた時）か、
+        // ここで強制アップデートするのもありだが、とりあえず State に持たせるだけにしておく
+      }
+      
+      // 初回起動で両方空の場合のデフォルト設定
+      if (loadedSites.length === 0 && (!data.targetUrls || data.targetUrls.length === 0)) {
+        loadedSites = [
+          {
+            id: crypto.randomUUID(),
+            name: 'すべてのサイト (デフォルト)',
+            urlPattern: '<all_urls>'
+          }
+        ]
+      }
+
+      const isInitial = (data.name ?? '') === '' && 
+                        loadedSites.length === 1 && 
+                        loadedSites[0].name === 'すべてのサイト (デフォルト)' && 
+                        loadedSites[0].urlPattern === '<all_urls>';
+                        
+      setIsSettingsOpen(isInitial);
+      setSites(loadedSites)
       setLoading(false)
     })
   }, [])
 
-  // ストレージへ保存（name / templates の一方が変わった際に両方保存）
+  // ストレージへ保存
   const persist = useCallback(
-    (nextName: string, nextTemplates: Template[]) => {
+    (nextName: string, nextTemplates: Template[], nextSites: Site[]) => {
       setSaveStatus('saving')
-      chrome.storage.local.set({ name: nextName, templates: nextTemplates }, () => {
+      // targetUrls はもう更新しないが、残しておいても実害はないのでそのままか除去する
+      chrome.storage.local.set({ name: nextName, templates: nextTemplates, sites: nextSites }, () => {
         setSaveStatus('saved')
         setTimeout(() => setSaveStatus('idle'), 2000)
       })
@@ -34,12 +70,17 @@ export default function App() {
 
   const handleNameSave = (newName: string) => {
     setName(newName)
-    persist(newName, templates)
+    persist(newName, templates, sites)
   }
 
   const handleTemplatesChange = (newTemplates: Template[]) => {
     setTemplates(newTemplates)
-    persist(name, newTemplates)
+    persist(name, newTemplates, sites)
+  }
+
+  const handleSitesChange = (newSites: Site[]) => {
+    setSites(newSites)
+    persist(name, templates, newSites)
   }
 
   if (loading) {
@@ -66,7 +107,7 @@ export default function App() {
             <img src="/icon.png" alt="アイコン" className="w-8 h-8 rounded-lg shadow-sm" />
             <div>
               <h1 className="text-base font-semibold text-slate-800 leading-none">テンプレート設定</h1>
-              <p className="text-xs text-slate-400 mt-0.5">Google Chat テンプレート拡張機能</p>
+              <p className="text-xs text-slate-400 mt-0.5">Custom Context Paste 拡張機能</p>
             </div>
           </div>
 
@@ -95,8 +136,24 @@ export default function App() {
 
       {/* メインコンテンツ */}
       <main className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-        <GlobalSettings name={name} onSave={handleNameSave} />
-        <TemplateManager templates={templates} onChange={handleTemplatesChange} />
+        <details 
+          className="group" 
+          open={isSettingsOpen}
+          onToggle={(e) => setIsSettingsOpen(e.currentTarget.open)}
+        >
+          <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors [&::-webkit-details-marker]:hidden">
+            <svg className="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            共通設定・対象サイトの管理
+          </summary>
+          <div className="pt-5 space-y-6">
+            <GlobalSettings name={name} onSave={handleNameSave} />
+            <SiteManager sites={sites} onChange={handleSitesChange} />
+          </div>
+        </details>
+
+        <TemplateManager templates={templates} sites={sites} onChange={handleTemplatesChange} />
       </main>
     </div>
   )

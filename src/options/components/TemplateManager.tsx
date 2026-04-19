@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
-import type { Template } from '../../types'
+import type { Site, Template } from '../../types'
 import TemplateForm from './TemplateForm'
 import TemplateItem from './TemplateItem'
 
 interface Props {
   templates: Template[]
+  sites: Site[]
   onChange: (templates: Template[]) => void
 }
 
-export default function TemplateManager({ templates, onChange }: Props) {
+export default function TemplateManager({ templates, sites, onChange }: Props) {
   // 'new' = 新規作成フォーム表示中、string = 該当 id の編集フォーム表示中、null = 非表示
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [insertTrigger, setInsertTrigger] = useState<{ ph: string; ts: number } | null>(null)
@@ -20,20 +21,21 @@ export default function TemplateManager({ templates, onChange }: Props) {
     setInsertTrigger({ ph, ts: Date.now() })
   }
 
-  const handleSaveNew = (title: string, format: string) => {
+  const handleSaveNew = (title: string, format: string, targetSiteIds?: string[]) => {
     const newTemplate: Template = {
       id: crypto.randomUUID(),
       title: title.trim(),
       format,
+      targetSiteIds,
     }
     onChange([...templates, newTemplate])
     setEditingId(null)
   }
 
-  const handleUpdate = (id: string, title: string, format: string) => {
+  const handleUpdate = (id: string, title: string, format: string, targetSiteIds?: string[]) => {
     onChange(
       templates.map((t) =>
-        t.id === id ? { ...t, title: title.trim(), format } : t,
+        t.id === id ? { ...t, title: title.trim(), format, targetSiteIds } : t,
       ),
     )
     setEditingId(null)
@@ -89,6 +91,8 @@ export default function TemplateManager({ templates, onChange }: Props) {
           <TemplateForm
             initialTitle=""
             initialFormat=""
+            initialTargetSiteIds={sites.length > 0 ? [sites[0].id] : undefined}
+            sites={sites}
             onSave={handleSaveNew}
             onCancel={() => setEditingId(null)}
             insertTrigger={editingId === 'new' ? insertTrigger : null}
@@ -121,7 +125,9 @@ export default function TemplateManager({ templates, onChange }: Props) {
                   <TemplateForm
                     initialTitle={template.title}
                     initialFormat={template.format}
-                    onSave={(title, format) => handleUpdate(template.id, title, format)}
+                    initialTargetSiteIds={template.targetSiteIds}
+                    sites={sites}
+                    onSave={(title, format, targetSiteIds) => handleUpdate(template.id, title, format, targetSiteIds)}
                     onCancel={() => setEditingId(null)}
                     insertTrigger={editingId === template.id ? insertTrigger : null}
                   />
@@ -129,6 +135,7 @@ export default function TemplateManager({ templates, onChange }: Props) {
               ) : (
                 <TemplateItem
                   template={template}
+                  sites={sites}
                   index={index}
                   disabled={isEditing}
                   onEdit={() => setEditingId(template.id)}

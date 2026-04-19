@@ -1,8 +1,9 @@
 import React from 'react'
-import type { Template } from '../../types'
+import type { Site, Template } from '../../types'
 
 interface Props {
   template: Template
+  sites: Site[]
   index: number
   disabled: boolean
   onEdit: () => void
@@ -11,11 +12,16 @@ interface Props {
 
 export default function TemplateItem({
   template,
+  sites,
   index,
   disabled,
   onEdit,
   onDelete,
 }: Props) {
+  const targetSiteNames = (template.targetSiteIds || [])
+    .map(id => sites.find(s => s.id === id)?.name)
+    .filter(Boolean) as string[]
+
   return (
     <div className="px-6 py-4 flex items-start gap-4 hover:bg-slate-50/70 transition-colors group">
       {/* 番号バッジ */}
@@ -28,6 +34,11 @@ export default function TemplateItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-800 truncate">{template.title}</p>
         <p className="text-xs font-mono text-slate-400 mt-0.5 truncate">{template.format}</p>
+        {targetSiteNames.length > 0 && (
+          <p className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-md mt-1.5 inline-block border border-emerald-100">
+            {targetSiteNames[0]} {targetSiteNames.length > 1 ? `他${targetSiteNames.length - 1}件` : ''}
+          </p>
+        )}
       </div>
 
       {/* 操作ボタン */}
