@@ -1,0 +1,30 @@
+{
+  "name": "Chrome Extension Dev",
+  // Microsoftが用意しているNode.jsとTypeScript開発に最適化された軽量イメージ
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  
+  "customizations": {
+    "vscode": {
+      // コンテナ内でVS Codeを開いたときに、自動でインストールさせたい拡張機能
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss" // Tailwindを使う場合
+      ],
+      // VS Codeの設定（フォーマットなど）
+      "settings": {
+        "editor.formatOnSave": true,
+        // "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  },
+
+  // コンテナ作成直後に自動でパッケージをインストールする
+  "postCreateCommand": "npm install",
+
+  // コンテナ内で起動したサーバー（Viteなど）のポートをパソコン側からアクセスできるようにする
+  "forwardPorts": [5173],
+
+  // コンテナに接続したときのデフォルトユーザー（rootを避けるためのベストプラクティス）
+  "remoteUser": "node"
+}
